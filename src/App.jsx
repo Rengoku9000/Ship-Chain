@@ -1,19 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import IntroSequence from './components/IntroSequence';
 import FloatingAuthTab from './components/FloatingAuthTab';
 import FeatureHighlights from './components/FeatureHighlights';
+import TopNavbar from './components/TopNavbar';
+import AuthAnimationSequence from './components/AuthAnimationSequence';
+import Dashboard from './components/dashboard/Dashboard';
 
 function App() {
-    const [appState, setAppState] = useState('INTRO'); // INTRO, FEATURES, AUTH, DASHBOARD
+    // Current visible primary block: INTRO, FEATURES, AUTH, DASHBOARD
+    const [appState, setAppState] = useState('INTRO');
+    const [authAction, setAuthAction] = useState('signin');
+    const [systemState, setSystemState] = useState('idle'); // 'idle', 'animating', 'active'
+    const [animationProgress, setAnimationProgress] = useState(0);
+    const [showDashboard, setShowDashboard] = useState(false);
 
     const handleStateChange = (newState) => {
         setAppState(newState);
     };
 
-    const handleLogin = (e) => {
-        if (e && e.preventDefault) e.preventDefault();
-        setAppState('DASHBOARD');
+    const handleLogin = () => {
+        setSystemState('animating');
     };
 
     // Timer transition from FEATURES to AUTH
@@ -28,37 +35,91 @@ function App() {
     }, [appState]);
 
     return (
-        <div className="relative bg-black w-full">
-            {/* Intro sequence handles its own fixed positioning and scrolling logic */}
-            {appState !== 'DASHBOARD' && (
+        <div className="relative bg-[#0b1f2a] w-full min-h-screen overflow-hidden">
+            {appState !== 'DASHBOARD' && appState !== 'AUTH' && (
+                <TopNavbar onOpenAuth={(view) => {
+                    setAuthAction(view);
+                    setAppState('AUTH');
+                }} />
+            )}
+
+            {appState === 'AUTH' && systemState === 'idle' && (
+                <TopNavbar onOpenAuth={(view) => {
+                    setAuthAction(view);
+                }} />
+            )}
+
+            {/* Intro sequence always runs so background doesn't cut out, unless system is active */}
+            {systemState !== 'active' && (
                 <IntroSequence appState={appState} onStateChange={handleStateChange} />
             )}
 
+            {/* Cinematic Transition Sequence */}
+            <AuthAnimationSequence
+                playing={systemState === 'animating'}
+                visible={systemState === 'animating' && animationProgress < 0.95}
+                onProgress={(p) => {
+                    setAnimationProgress(p);
+                    if (p > 0.85 && !showDashboard) {
+                        setShowDashboard(true);
+                    }
+                }}
+                onComplete={() => {
+                    setSystemState('active');
+                    setAppState('DASHBOARD');
+                }}
+            />
+
             {/* Feature Highlights Overlay */}
             <AnimatePresence>
-                {appState === 'FEATURES' && (
+                {appState === 'FEATURES' && systemState === 'idle' && (
                     <FeatureHighlights />
                 )}
             </AnimatePresence>
 
             {/* Floating Auth Tab Overlay */}
             <AnimatePresence>
-                {appState === 'AUTH' && (
-                    <FloatingAuthTab onLogin={handleLogin} />
+                {appState === 'AUTH' && systemState !== 'active' && (
+                    <FloatingAuthTab
+                        onLogin={handleLogin}
+                        initialView={authAction}
+                        onClose={() => setAppState('INTRO')}
+                        animationProgress={animationProgress}
+                    />
                 )}
             </AnimatePresence>
 
-            {/* Dashboard State */}
-            {appState === 'DASHBOARD' && (
-                <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0a0a0a] text-white p-8">
-                    <h1 className="text-4xl md:text-6xl font-light tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-emerald-400 mb-4">
-                        ChainGuard AI+ Dashboard
-                    </h1>
-                    <p className="text-gray-400 max-w-xl text-center text-lg font-light leading-relaxed">
-                        Welcome to the intelligent supply chain system.
-                    </p>
-                </div>
-            )}
+            {/* Dashboard State Overlay */}
+            <AnimatePresence>
+                {showDashboard && (
+                    <div className="fixed inset-0 z-40 pointer-events-none flex p-8">
+                        {/* Background Video Layer */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 2, ease: "easeInOut", delay: 0.2 }}
+                            className="absolute inset-0 -z-10 bg-[#0b1f2a] overflow-hidden"
+                        >
+                            <video
+                                src="/Firefly create a seamless looping background video for a premium global logistics dashboard with a m.mp4"
+                                autoPlay
+                                loop
+                                muted
+                                playsInline
+                                className="w-full h-full object-cover opacity-60 blur-sm brightness-90 scale-105"
+                                style={{ pointerEvents: 'none' }}
+                            />
+                            {/* Radial masking gradient softened to reveal more center detail */}
+                            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_#0b1f2aa0_0%,_#0b1f2a50_30%,_transparent_70%)] pointer-events-none" />
+                            {/* Original bottom-up overlay lightened for contrast balance */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#020b14]/80 via-[#0b1f2a]/50 to-transparent pointer-events-none" />
+                        </motion.div>
+
+                        {/* Render newly orchestrated modular dashboard components */}
+                        <Dashboard />
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

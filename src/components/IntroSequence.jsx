@@ -83,7 +83,8 @@ const IntroSequence = ({ appState, onStateChange }) => {
         let animationFrameId;
 
         const renderFrame = () => {
-            if (appState === 'DASHBOARD') return;
+            // Keep rendering frame so DASHBOARD has lively background
+            //            if (appState === 'DASHBOARD') return;
 
             if (canvas.width !== window.innerWidth) canvas.width = window.innerWidth;
             if (canvas.height !== window.innerHeight) canvas.height = window.innerHeight;
@@ -138,9 +139,9 @@ const IntroSequence = ({ appState, onStateChange }) => {
                 <motion.div
                     style={{
                         scale,
-                        filter: useTransform(brightness, b => `brightness(${b}) blur(${appState === 'AUTH' ? '8px' : '0px'})`),
+                        filter: useTransform(brightness, b => `brightness(${b}) blur(${appState === 'AUTH' ? '12px' : '0px'})`),
                     }}
-                    className="w-full h-full transform-gpu transition-[filter] duration-700"
+                    className="w-full h-full transform-gpu transition-[filter] duration-1000 ease-in-out"
                 >
                     <canvas
                         ref={canvasRef}
