@@ -6,6 +6,7 @@ import FeatureHighlights from './components/FeatureHighlights';
 import TopNavbar from './components/TopNavbar';
 import AuthAnimationSequence from './components/AuthAnimationSequence';
 import Dashboard from './components/dashboard/Dashboard';
+import { logoutUser, subscribeToAuthState } from './lib/authService';
 
 function App() {
     // Current visible primary block: INTRO, FEATURES, AUTH, DASHBOARD
@@ -14,13 +15,23 @@ function App() {
     const [systemState, setSystemState] = useState('idle'); // 'idle', 'animating', 'active'
     const [animationProgress, setAnimationProgress] = useState(0);
     const [showDashboard, setShowDashboard] = useState(false);
+    const [currentUser, setCurrentUser] = useState(null);
 
     const handleStateChange = (newState) => {
         setAppState(newState);
     };
 
     const handleLogin = () => {
-        setSystemState('animating');
+        setSystemState('idle');
+    };
+
+    const handleLogout = async () => {
+        await logoutUser();
+        setCurrentUser(null);
+        setAppState('INTRO');
+        setSystemState('idle');
+        setShowDashboard(false);
+        setAnimationProgress(0);
     };
 
     // Timer transition from FEATURES to AUTH
@@ -33,6 +44,21 @@ function App() {
         }
         return () => clearTimeout(timer);
     }, [appState]);
+
+    useEffect(() => {
+        const unsubscribe = subscribeToAuthState((user) => {
+            setCurrentUser(user);
+            if (user) {
+                setShowDashboard(true);
+                setSystemState('active');
+                setAppState('DASHBOARD');
+            } else {
+                setSystemState('idle');
+            }
+        });
+
+        return () => unsubscribe();
+    }, []);
 
     return (
         <div className="relative bg-[#0b1f2a] w-full min-h-screen overflow-hidden">
@@ -116,7 +142,7 @@ function App() {
                         </motion.div>
 
                         {/* Render newly orchestrated modular dashboard components */}
-                        <Dashboard />
+                        <Dashboard currentUser={currentUser} onLogout={handleLogout} />
                     </div>
                 )}
             </AnimatePresence>

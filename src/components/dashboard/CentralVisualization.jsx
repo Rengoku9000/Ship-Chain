@@ -55,7 +55,13 @@ const GLOBAL_NODES = [
     { id: 'au', name: 'Australia', coords: [850, 380] }
 ];
 
-const CentralVisualization = ({ shipments, selectedId, onSelect }) => {
+const projectPoint = (lat, lng) => {
+    const x = ((lng + 180) / 360) * 1000;
+    const y = ((90 - lat) / 180) * 507;
+    return [x, y];
+};
+
+const CentralVisualization = ({ shipments, selectedId, onSelect, userEvents = [] }) => {
     if (!shipments) return null;
 
     return (
@@ -125,7 +131,7 @@ const CentralVisualization = ({ shipments, selectedId, onSelect }) => {
                     const strokeWidth = isSelected ? 4 : 2;
 
                     const pathD = getSmoothPathString(ship.path);
-                    const currentPos = getPointOnPath(ship.path, ship.progress);
+                    const currentPos = ship.markerPosition || getPointOnPath(ship.path, ship.progress);
 
                     return (
                         <g key={ship.id} onClick={() => onSelect(ship.id)} className="cursor-pointer transition-opacity duration-300">
@@ -191,6 +197,40 @@ const CentralVisualization = ({ shipments, selectedId, onSelect }) => {
                                     className="transition-colors duration-300 pointer-events-auto"
                                     filter="url(#glow)"
                                 />
+                            </g>
+                        </g>
+                    );
+                })}
+
+                {/* Render User Events */}
+                {userEvents.map(event => {
+                    const [x, y] = projectPoint(event.lat, event.lng);
+                    return (
+                        <g key={event.id} transform={`translate(${x}, ${y})`} className="pointer-events-auto group">
+                            {/* Alert Pulse Effect */}
+                            <motion.circle
+                                r={15}
+                                fill="#f43f5e"
+                                initial={{ opacity: 0.8, scale: 0.1 }}
+                                animate={{ opacity: 0, scale: 2 }}
+                                transition={{ repeat: Infinity, duration: 2, ease: "easeOut" }}
+                            />
+                            
+                            {/* Event Marker */}
+                            <circle 
+                                r={5} 
+                                fill="#f43f5e" 
+                                stroke="#fff"
+                                strokeWidth={1.5}
+                                filter="url(#glow)"
+                            />
+
+                            {/* Tooltip on Hover */}
+                            <g className="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                <rect x={10} y={-10} width={150} height={24} rx={4} fill="#0f172a" fillOpacity={0.9} stroke="#334155" strokeWidth={1} />
+                                <text x={18} y={6} fill="#fff" fontSize={11} fontFamily="sans-serif" fontWeight="500">
+                                    {event.title || 'User Event'}
+                                </text>
                             </g>
                         </g>
                     );

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shield, ChevronLeft, Mail, Lock, ArrowRight, User } from 'lucide-react';
+import { signInWithEmail, signInWithGoogle, signUpWithEmail } from '../lib/authService';
 
 const GoogleSVG = () => (
     <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -13,13 +14,22 @@ const GoogleSVG = () => (
 
 const FloatingAuthTab = ({ onLogin, animationProgress = 0 }) => {
     const [isAuthenticating, setIsAuthenticating] = useState(false);
-    const [authMode, setAuthMode] = useState('google'); // 'google', 'email', 'signup'
+    const [authMode, setAuthMode] = useState('google');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [name, setName] = useState('');
+    const [error, setError] = useState('');
 
-    const handleAuth = (e) => {
-        if (e) e.preventDefault();
+    const finishLogin = async (authAction) => {
+        setError('');
         setIsAuthenticating(true);
-        // Start login immediately, the App handles animation progressively
-        onLogin();
+        try {
+            await authAction();
+            onLogin();
+        } catch (err) {
+            setError(err.message || 'Authentication failed.');
+            setIsAuthenticating(false);
+        }
     };
 
     return (
@@ -43,17 +53,17 @@ const FloatingAuthTab = ({ onLogin, animationProgress = 0 }) => {
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
                             transition={{ duration: 0.8, ease: "easeOut" }}
-                            style={{
-                                transform: `scale(${1 - animationProgress * 0.05})`
-                            }}
+                            style={{ transform: `scale(${1 - animationProgress * 0.05})` }}
                             className="relative w-full max-w-[400px]"
                         >
                             <div className="overflow-hidden bg-slate-900/40 backdrop-blur-xl border border-white/10 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.6)] rounded-2xl p-10 flex flex-col items-center">
-
                                 <div className="mb-10 text-center space-y-1.5 w-full relative">
                                     {authMode !== 'google' && (
                                         <button
-                                            onClick={() => setAuthMode('google')}
+                                            onClick={() => {
+                                                setAuthMode('google');
+                                                setError('');
+                                            }}
                                             className="absolute left-0 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
                                         >
                                             <ChevronLeft className="w-5 h-5" />
@@ -63,7 +73,7 @@ const FloatingAuthTab = ({ onLogin, animationProgress = 0 }) => {
                                         Access Gateway
                                     </h2>
                                     <p className="text-[11px] text-slate-400 uppercase tracking-[0.2em] font-mono opacity-80">
-                                        Secure Identity Verification
+                                        Firebase Identity + Cloud Persistence
                                     </p>
                                 </div>
 
@@ -78,7 +88,7 @@ const FloatingAuthTab = ({ onLogin, animationProgress = 0 }) => {
                                             className="w-full flex flex-col items-center"
                                         >
                                             <button
-                                                onClick={handleAuth}
+                                                onClick={() => finishLogin(() => signInWithGoogle())}
                                                 className="w-full flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 font-medium py-3.5 rounded-lg hover:-translate-y-[1px] active:scale-[0.98] transition-all duration-300 shadow-sm"
                                             >
                                                 <GoogleSVG />
@@ -92,7 +102,10 @@ const FloatingAuthTab = ({ onLogin, animationProgress = 0 }) => {
                                             </div>
 
                                             <button
-                                                onClick={() => setAuthMode('email')}
+                                                onClick={() => {
+                                                    setAuthMode('email');
+                                                    setError('');
+                                                }}
                                                 className="text-xs text-slate-400 hover:text-slate-200 font-light tracking-wide transition-colors duration-300 border-b border-transparent hover:border-slate-400 pb-0.5"
                                             >
                                                 Use email instead
@@ -107,14 +120,17 @@ const FloatingAuthTab = ({ onLogin, animationProgress = 0 }) => {
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, y: -10 }}
                                             transition={{ duration: 0.4 }}
-                                            onSubmit={handleAuth}
+                                            onSubmit={(e) => {
+                                                e.preventDefault();
+                                                finishLogin(() => signInWithEmail(email, password));
+                                            }}
                                             className="w-full space-y-5"
                                         >
                                             <div className="space-y-1.5">
                                                 <label className="text-[10px] text-slate-400/80 uppercase tracking-[0.15em] pl-1 font-medium">Clearance ID</label>
                                                 <div className="relative">
                                                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                                    <input type="email" className="w-full bg-slate-950/40 border border-white/10 rounded-lg pl-10 pr-3 py-3 text-slate-200 text-sm focus:border-slate-400/50 outline-none transition-all font-mono placeholder:text-slate-600 focus:bg-slate-900/60" placeholder="user@domain.com" required />
+                                                    <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="w-full bg-slate-950/40 border border-white/10 rounded-lg pl-10 pr-3 py-3 text-slate-200 text-sm focus:border-slate-400/50 outline-none transition-all font-mono placeholder:text-slate-600 focus:bg-slate-900/60" placeholder="user@domain.com" required />
                                                 </div>
                                             </div>
 
@@ -122,7 +138,7 @@ const FloatingAuthTab = ({ onLogin, animationProgress = 0 }) => {
                                                 <label className="text-[10px] text-slate-400/80 uppercase tracking-[0.15em] pl-1 font-medium">Authentication Key</label>
                                                 <div className="relative">
                                                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                                    <input type="password" className="w-full bg-slate-950/40 border border-white/10 rounded-lg pl-10 pr-3 py-3 text-slate-200 text-sm focus:border-slate-400/50 outline-none transition-all font-mono placeholder:text-slate-600 tracking-[0.2em] focus:bg-slate-900/60" placeholder="••••••••" required />
+                                                    <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="w-full bg-slate-950/40 border border-white/10 rounded-lg pl-10 pr-3 py-3 text-slate-200 text-sm focus:border-slate-400/50 outline-none transition-all font-mono placeholder:text-slate-600 tracking-[0.2em] focus:bg-slate-900/60" placeholder="........" required />
                                                 </div>
                                             </div>
 
@@ -131,13 +147,13 @@ const FloatingAuthTab = ({ onLogin, animationProgress = 0 }) => {
                                                 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                                             </button>
 
-                                            <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/5">
-                                                <button type="button" className="text-[10px] text-slate-400 hover:text-slate-200 uppercase tracking-widest transition-colors font-medium">
-                                                    Forgot Password?
-                                                </button>
+                                            <div className="flex items-center justify-end mt-6 pt-4 border-t border-white/5">
                                                 <button
                                                     type="button"
-                                                    onClick={() => setAuthMode('signup')}
+                                                    onClick={() => {
+                                                        setAuthMode('signup');
+                                                        setError('');
+                                                    }}
                                                     className="text-[10px] text-blue-300 hover:text-blue-200 uppercase tracking-widest transition-colors font-medium"
                                                 >
                                                     Create Account
@@ -153,14 +169,17 @@ const FloatingAuthTab = ({ onLogin, animationProgress = 0 }) => {
                                             animate={{ opacity: 1, y: 0 }}
                                             exit={{ opacity: 0, y: -10 }}
                                             transition={{ duration: 0.4 }}
-                                            onSubmit={handleAuth}
+                                            onSubmit={(e) => {
+                                                e.preventDefault();
+                                                finishLogin(() => signUpWithEmail(name, email, password));
+                                            }}
                                             className="w-full space-y-4"
                                         >
                                             <div className="space-y-1.5">
                                                 <label className="text-[10px] text-slate-400/80 uppercase tracking-[0.15em] pl-1 font-medium">Full Identity</label>
                                                 <div className="relative">
                                                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                                    <input type="text" className="w-full bg-slate-950/40 border border-white/10 rounded-lg pl-10 pr-3 py-2.5 text-slate-200 text-sm focus:border-slate-400/50 outline-none transition-all font-mono placeholder:text-slate-600 focus:bg-slate-900/60" placeholder="Commander Shepard" required />
+                                                    <input value={name} onChange={(e) => setName(e.target.value)} type="text" className="w-full bg-slate-950/40 border border-white/10 rounded-lg pl-10 pr-3 py-2.5 text-slate-200 text-sm focus:border-slate-400/50 outline-none transition-all font-mono placeholder:text-slate-600 focus:bg-slate-900/60" placeholder="Commander Shepard" required />
                                                 </div>
                                             </div>
 
@@ -168,7 +187,7 @@ const FloatingAuthTab = ({ onLogin, animationProgress = 0 }) => {
                                                 <label className="text-[10px] text-slate-400/80 uppercase tracking-[0.15em] pl-1 font-medium">Clearance ID</label>
                                                 <div className="relative">
                                                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                                    <input type="email" className="w-full bg-slate-950/40 border border-white/10 rounded-lg pl-10 pr-3 py-2.5 text-slate-200 text-sm focus:border-slate-400/50 outline-none transition-all font-mono placeholder:text-slate-600 focus:bg-slate-900/60" placeholder="user@domain.com" required />
+                                                    <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="w-full bg-slate-950/40 border border-white/10 rounded-lg pl-10 pr-3 py-2.5 text-slate-200 text-sm focus:border-slate-400/50 outline-none transition-all font-mono placeholder:text-slate-600 focus:bg-slate-900/60" placeholder="user@domain.com" required />
                                                 </div>
                                             </div>
 
@@ -176,7 +195,7 @@ const FloatingAuthTab = ({ onLogin, animationProgress = 0 }) => {
                                                 <label className="text-[10px] text-slate-400/80 uppercase tracking-[0.15em] pl-1 font-medium">Authentication Key</label>
                                                 <div className="relative">
                                                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                                                    <input type="password" className="w-full bg-slate-950/40 border border-white/10 rounded-lg pl-10 pr-3 py-2.5 text-slate-200 text-sm focus:border-slate-400/50 outline-none transition-all font-mono placeholder:text-slate-600 tracking-[0.2em] focus:bg-slate-900/60" placeholder="••••••••" required />
+                                                    <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="w-full bg-slate-950/40 border border-white/10 rounded-lg pl-10 pr-3 py-2.5 text-slate-200 text-sm focus:border-slate-400/50 outline-none transition-all font-mono placeholder:text-slate-600 tracking-[0.2em] focus:bg-slate-900/60" placeholder="........" required />
                                                 </div>
                                             </div>
 
@@ -188,10 +207,16 @@ const FloatingAuthTab = ({ onLogin, animationProgress = 0 }) => {
                                     )}
                                 </AnimatePresence>
 
+                                {error && (
+                                    <div className="mt-4 w-full rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+                                        {error}
+                                    </div>
+                                )}
+
                                 <div className="mt-8 flex items-center space-x-2 opacity-60">
                                     <Shield className="w-3 h-3 text-slate-500" />
                                     <span className="text-[9px] text-slate-400 uppercase tracking-[0.2em]">
-                                        Secure Enterprise Connection
+                                        Secure Firebase Connection
                                     </span>
                                 </div>
                             </div>
@@ -203,15 +228,10 @@ const FloatingAuthTab = ({ onLogin, animationProgress = 0 }) => {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.8, delay: 0.1 }}
-                            style={{
-                                transform: `scale(${1 - animationProgress * 0.05})`
-                            }}
+                            style={{ transform: `scale(${1 - animationProgress * 0.05})` }}
                             className="absolute flex flex-col items-center justify-center pointer-events-none"
                         >
-                            <motion.div
-                                animate={{ scale: [1, 0.98, 1] }}
-                                transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                            >
+                            <motion.div animate={{ scale: [1, 0.98, 1] }} transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}>
                                 <motion.p
                                     animate={{ opacity: [0.3, 1, 0.3] }}
                                     transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}

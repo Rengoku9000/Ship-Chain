@@ -1,14 +1,54 @@
 import React, { useState } from 'react';
 import { Send, Cpu } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { chainguardApi } from '../../lib/chainguardApi';
 
-const AIAssistant = React.memo(() => {
+const AIAssistant = React.memo(({ selectedShipment }) => {
     const [messages, setMessages] = useState([
         { role: 'system', text: "System intelligence online. Awaiting query." }
     ]);
+    const [draft, setDraft] = useState('');
 
-    const handleSuggest = (prompt) => {
-        setMessages(prev => [...prev, { role: 'user', text: prompt }, { role: 'system', text: 'Processing spatial routing alternatives to minimize delay impact... Optimal path generated.' }]);
+    const handleSuggest = async (prompt) => {
+        setMessages(prev => [...prev, { role: 'user', text: prompt }]);
+
+        if (!selectedShipment) {
+            setMessages(prev => [...prev, { role: 'system', text: 'Select a shipment first so the AI core can analyze a live route.' }]);
+            return;
+        }
+
+        try {
+            if (prompt.toLowerCase().includes('optimize')) {
+                const route = await chainguardApi.getBestRoute(selectedShipment.source, selectedShipment.destination);
+                setMessages(prev => [
+                    ...prev,
+                    {
+                        role: 'system',
+                        text: `Best route: ${route.new_route.join(' -> ')}. Estimated transit ${route.new_time} min, saving ${route.time_saved} min against the current corridor.`,
+                    },
+                ]);
+                return;
+            }
+
+            const cost = await chainguardApi.getCost(selectedShipment.numericId);
+            setMessages(prev => [
+                ...prev,
+                {
+                    role: 'system',
+                    text: `Delay exposure is $${cost.current_loss.toFixed(2)} with modeled recovery savings of $${cost.optimized_savings.toFixed(2)}. ${selectedShipment.explanation}`,
+                },
+            ]);
+        } catch (_error) {
+            setMessages(prev => [...prev, { role: 'system', text: 'Backend query failed. Confirm the FastAPI service is still running.' }]);
+        }
+    };
+
+    const handleSubmit = async (event) => {
+        event.preventDefault();
+        if (!draft.trim()) return;
+        const prompt = draft.trim();
+        setDraft('');
+        await handleSuggest(prompt);
     };
 
     return (
@@ -41,12 +81,18 @@ const AIAssistant = React.memo(() => {
                 </button>
             </div>
 
-            <div className="relative">
-                <input type="text" placeholder="Query system..." className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-[10px] font-mono text-slate-200 focus:outline-none focus:border-blue-500/50" />
-                <button className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200 mix-blend-screen mix-blend-mode">
+            <form onSubmit={handleSubmit} className="relative">
+                <input
+                    type="text"
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    placeholder="Query system..."
+                    className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-[10px] font-mono text-slate-200 focus:outline-none focus:border-blue-500/50"
+                />
+                <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-200 mix-blend-screen mix-blend-mode">
                     <Send className="w-3 h-3" />
                 </button>
-            </div>
+            </form>
         </div>
     );
 });

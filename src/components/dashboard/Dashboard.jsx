@@ -1,93 +1,239 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { motion } from 'framer-motion';
 import HeaderSystem from './HeaderSystem';
 import ShipmentPanel from './ShipmentPanel';
 import AlertsPanel from './AlertsPanel';
-import CentralVisualization from './CentralVisualization';
+import GoogleMapView from './GoogleMapView';
 import MetricsPanel from './MetricsPanel';
 import CostAnalysis from './CostAnalysis';
 import EventTimeline from './EventTimeline';
 import AIAssistant from './AIAssistant';
 import FloatingAssistant from './FloatingAssistant';
+import { buildUpdateAlerts, chainguardApi, createAlertsFromShipments } from '../../lib/chainguardApi';
+import { subscribeToEvents } from '../../lib/dbService';
 
-const INITIAL_SHIPMENTS = [
-    { id: 'LBL-1094', status: 'IN TRANSIT', eta: '12:45', riskScore: 12, aiConfidence: 98, path: [[800, 200], [500, 100], [220, 180]], costImpact: '$1.2k/hr', progress: 0.1 },
-    { id: 'OCN-4421', status: 'DELAYED', eta: '--:--', riskScore: 84, aiConfidence: 62, path: [[480, 150], [350, 140], [220, 180]], costImpact: '$8.5k penalties', progress: 0.5 },
-    { id: 'PAC-9902', status: 'HIGH RISK', eta: '18:30', riskScore: 92, aiConfidence: 45, path: [[850, 380], [830, 280], [800, 200]], costImpact: 'Critical', progress: 0.2 },
-];
-
-const INITIAL_ALERTS = [
-    { id: 1, severity: 'low', text: 'Routine sync verified', timestamp: '12:00:01' }
-];
-
-const Dashboard = () => {
-    const [shipments, setShipments] = useState(INITIAL_SHIPMENTS);
-    const [alerts, setAlerts] = useState(INITIAL_ALERTS);
+const Dashboard = ({ currentUser, onLogout }) => {
+    const [shipments, setShipments] = useState([]);
+    const [alerts, setAlerts] = useState([]);
     const [selectedShipmentId, setSelectedShipmentId] = useState(null);
-    const [simulationMode, setSimulationMode] = useState(true);
+    const [liveFeedEnabled, setLiveFeedEnabled] = useState(true);
+    const [connectionStatus, setConnectionStatus] = useState('CONNECTING');
+    const [warehouseData, setWarehouseData] = useState([]);
+    const [selectedCost, setSelectedCost] = useState(null);
+    const [selectedLogs, setSelectedLogs] = useState([]);
+    const [selectedLogHash, setSelectedLogHash] = useState('');
+    const [userEvents, setUserEvents] = useState([]);
+    const previousShipmentsRef = useRef([]);
+    const socketRef = useRef(null);
+    const reconnectTimerRef = useRef(null);
 
-    // Central Simulation Engine
     useEffect(() => {
-        if (!simulationMode) return;
+        const unsubscribe = subscribeToEvents((events) => {
+            setUserEvents(events);
+        });
+        return () => unsubscribe();
+    }, []);
 
-        const interval = setInterval(() => {
-            setShipments(prev => {
-                return prev.map(ship => {
-                    // Increment progress simulating movement
-                    let newProgress = ship.progress + (Math.random() * 0.05);
-                    if (newProgress > 1) newProgress = 0;
+    const hydrateDashboard = async () => {
+        const [initialShipments, warehouseResponse] = await Promise.all([
+            chainguardApi.getShipments(),
+            chainguardApi.getWarehouseStatus(),
+        ]);
 
-                    let newRisk = ship.riskScore;
-                    if (Math.random() > 0.8) {
-                        newRisk = Math.max(0, Math.min(100, newRisk + (Math.floor(Math.random() * 11) - 5)));
-                    }
+        setShipments(initialShipments);
+        setWarehouseData(warehouseResponse.warehouses);
+        setAlerts((currentAlerts) => {
+            const withoutOfflineBanner = currentAlerts.filter((alert) => alert.id !== 'boot-error');
+            const seeded = createAlertsFromShipments(initialShipments);
+            return withoutOfflineBanner.length ? withoutOfflineBanner : seeded;
+        });
+        previousShipmentsRef.current = initialShipments;
+        setConnectionStatus('LIVE');
+        return initialShipments;
+    };
 
-                    let newStatus = ship.status;
-                    if (newRisk > 85) newStatus = 'HIGH RISK';
-                    else if (newRisk > 50 && newStatus !== 'DELAYED') newStatus = 'WARNING';
-                    else if (newStatus !== 'DELAYED') newStatus = 'IN TRANSIT';
+    useEffect(() => {
+        let cancelled = false;
 
-                    return { ...ship, progress: newProgress, riskScore: newRisk, status: newStatus };
-                });
-            });
-
-            // Random alert injection
-            if (Math.random() > 0.85) {
-                setAlerts(prev => {
-                    const newAlert = {
-                        id: Date.now(),
-                        severity: Math.random() > 0.7 ? 'high' : (Math.random() > 0.4 ? 'medium' : 'low'),
-                        text: Math.random() > 0.5 ? 'Atmospheric anomaly detected on PAC sector.' : 'Vessel localized. Speed adjustment recorded.',
-                        timestamp: new Date().toLocaleTimeString('en-US', { hour12: false })
-                    }
-                    return [newAlert, ...prev].slice(0, 5); // Keep last 5
-                });
+        const loadInitialData = async () => {
+            try {
+                if (cancelled) return;
+                const initialShipments = await hydrateDashboard();
+                if (!selectedShipmentId && initialShipments[0]) {
+                    setSelectedShipmentId(initialShipments[0].id);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    setConnectionStatus('OFFLINE');
+                    setAlerts([
+                        {
+                            id: 'boot-error',
+                            severity: 'high',
+                            text: 'Backend unreachable. Start FastAPI on 127.0.0.1:8000 to stream live data.',
+                            timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
+                        },
+                    ]);
+                }
             }
+        };
 
-        }, 2500);
+        loadInitialData();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!shipments.length) return;
+        const selectionStillExists = shipments.some((shipment) => shipment.id === selectedShipmentId);
+        if (!selectionStillExists) {
+            setSelectedShipmentId(shipments[0].id);
+        }
+    }, [selectedShipmentId, shipments]);
+
+    useEffect(() => {
+        const interval = setInterval(async () => {
+            try {
+                const warehouseResponse = await chainguardApi.getWarehouseStatus();
+                setWarehouseData(warehouseResponse.warehouses);
+            } catch (_error) {
+                // Keep the last known warehouse state when polling fails.
+            }
+        }, 9000);
 
         return () => clearInterval(interval);
-    }, [simulationMode]);
+    }, []);
 
-    const selectedShipment = useMemo(() => shipments.find(s => s.id === selectedShipmentId) || null, [shipments, selectedShipmentId]);
+    useEffect(() => {
+        if (!liveFeedEnabled) {
+            socketRef.current?.close();
+            socketRef.current = null;
+            if (reconnectTimerRef.current) {
+                clearTimeout(reconnectTimerRef.current);
+                reconnectTimerRef.current = null;
+            }
+            setConnectionStatus('PAUSED');
+            return;
+        }
+
+        let disposed = false;
+
+        const connect = async () => {
+            try {
+                await hydrateDashboard();
+            } catch (_error) {
+                setConnectionStatus('OFFLINE');
+            }
+            if (disposed) return;
+
+            const socket = chainguardApi.connectToShipments((incomingShipments) => {
+                setShipments(incomingShipments);
+                setAlerts((currentAlerts) => [
+                    ...buildUpdateAlerts(previousShipmentsRef.current, incomingShipments),
+                    ...currentAlerts,
+                ].slice(0, 6));
+                previousShipmentsRef.current = incomingShipments;
+                setConnectionStatus('LIVE');
+            });
+
+            socket.onopen = () => setConnectionStatus('LIVE');
+            socket.onerror = () => setConnectionStatus('OFFLINE');
+            socket.onclose = () => {
+                if (!liveFeedEnabled || disposed) return;
+                setConnectionStatus('OFFLINE');
+                reconnectTimerRef.current = setTimeout(() => {
+                    connect();
+                }, 2500);
+            };
+
+            socketRef.current = socket;
+        };
+
+        connect();
+
+        return () => {
+            disposed = true;
+            if (reconnectTimerRef.current) {
+                clearTimeout(reconnectTimerRef.current);
+                reconnectTimerRef.current = null;
+            }
+            socketRef.current?.close();
+            socketRef.current = null;
+        };
+    }, [liveFeedEnabled]);
+
+    useEffect(() => {
+        if (!selectedShipmentId) return;
+
+        const selectedShipment = shipments.find((shipment) => shipment.id === selectedShipmentId);
+        if (!selectedShipment) return;
+
+        let cancelled = false;
+
+        const loadSelectedShipmentData = async () => {
+            try {
+                const [costResponse, logsResponse] = await Promise.all([
+                    chainguardApi.getCost(selectedShipment.numericId),
+                    chainguardApi.getLogs(selectedShipment.numericId),
+                ]);
+
+                if (cancelled) return;
+
+                setSelectedCost(costResponse);
+                setSelectedLogs(logsResponse.log);
+                setSelectedLogHash(logsResponse.hash);
+            } catch (_error) {
+                if (!cancelled) {
+                    setSelectedCost(null);
+                    setSelectedLogs([]);
+                    setSelectedLogHash('');
+                }
+            }
+        };
+
+        loadSelectedShipmentData();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [selectedShipmentId, shipments]);
+
+    const selectedShipment = useMemo(
+        () => shipments.find((shipment) => shipment.id === selectedShipmentId) || null,
+        [shipments, selectedShipmentId]
+    );
+
+    const warehouseSummary = useMemo(() => {
+        if (!warehouseData.length) return { label: 'Warehouse syncing', level: 'LOW' };
+        const highLoadCount = warehouseData.filter((item) => item.status === 'High').length;
+        if (highLoadCount >= 2) return { label: 'Warehouse strain', level: 'HIGH' };
+        if (highLoadCount === 1) return { label: 'Warehouse watch', level: 'MEDIUM' };
+        return { label: 'Warehouse fluid', level: 'LOW' };
+    }, [warehouseData]);
+
+    const headerSimulationMode = liveFeedEnabled && connectionStatus === 'LIVE';
 
     return (
         <div className="absolute inset-0 z-20 pointer-events-none p-6 grid grid-cols-12 grid-rows-6 gap-6">
+            <GoogleMapView shipments={shipments} selectedId={selectedShipmentId} onSelect={setSelectedShipmentId} userEvents={userEvents} />
 
-            {/* Background Visualization Layer (Map & Routes) */}
-            <CentralVisualization shipments={shipments} selectedId={selectedShipmentId} onSelect={setSelectedShipmentId} />
-
-            {/* Header spanning top */}
             <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 1.2, ease: "easeOut", delay: 0.1 }}
                 className="col-span-12 row-span-1 pointer-events-auto z-20 h-16"
             >
-                <HeaderSystem simulationMode={simulationMode} onToggle={() => setSimulationMode(!simulationMode)} />
+                <HeaderSystem
+                    simulationMode={headerSimulationMode}
+                    onToggle={() => setLiveFeedEnabled((current) => !current)}
+                    connectionStatus={connectionStatus}
+                    warehouseSummary={warehouseSummary}
+                    currentUser={currentUser}
+                    onLogout={onLogout}
+                />
             </motion.div>
 
-            {/* Left Panels: Shipments & Alerts */}
             <motion.div
                 initial={{ opacity: 0, x: -30 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -98,32 +244,32 @@ const Dashboard = () => {
                 <AlertsPanel alerts={alerts} />
             </motion.div>
 
-            {/* Center Empty Space for Map */}
             <div className="col-span-6 row-span-4 z-10" />
 
-            {/* Right Panels: Metrics, Cost, Assistant */}
             <motion.div
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 1.2, ease: "easeOut", delay: 0.5 }}
                 className="col-span-3 row-span-4 pointer-events-auto z-20 flex flex-col gap-6"
             >
-                <MetricsPanel shipments={shipments} />
-                <CostAnalysis />
-                <AIAssistant />
+                <MetricsPanel shipments={shipments} warehouseData={warehouseData} />
+                <CostAnalysis shipment={selectedShipment} costData={selectedCost} />
+                <AIAssistant selectedShipment={selectedShipment} />
             </motion.div>
 
-            {/* Bottom Panel: Event Timeline */}
             <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 1.2, ease: "easeOut", delay: 0.7 }}
                 className="col-span-12 row-span-1 pointer-events-auto z-20"
             >
-                <EventTimeline selectedShipment={selectedShipment} />
+                <EventTimeline
+                    selectedShipment={selectedShipment}
+                    logs={selectedLogs}
+                    logHash={selectedLogHash}
+                />
             </motion.div>
 
-            {/* Floating Elements */}
             <FloatingAssistant activeShipment={selectedShipment} />
         </div>
     );

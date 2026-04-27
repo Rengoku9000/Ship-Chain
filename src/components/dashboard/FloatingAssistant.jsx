@@ -35,10 +35,10 @@ const FloatingAssistant = React.memo(({ activeShipment }) => {
                         <div>
                             <h3 className="text-[10px] text-blue-300 font-medium tracking-widest uppercase mb-1">Divergence Detected</h3>
                             <p className="text-[9px] text-slate-300 font-mono leading-relaxed opacity-80">
-                                Shipment {activeShipment.id} is experiencing elevated risk ({activeShipment.riskScore}%). I can re-route via secondary channel to mitigate impact.
+                                Shipment {activeShipment.id} is experiencing elevated risk ({activeShipment.riskScore}%). {activeShipment.explanation}
                             </p>
                             <button className="mt-3 text-[9px] bg-blue-500/20 hover:bg-blue-500/40 text-blue-300 px-3 py-1 rounded tracking-widest uppercase transition-colors w-full border border-blue-500/30">
-                                Execute Reroute
+                                {activeShipment.timeSaved > 0 ? `Alt Route Saves ${activeShipment.timeSaved}m` : 'Route Analysis Ready'}
                             </button>
                         </div>
                     </div>
