@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Network, Database, Activity, LogOut } from 'lucide-react';
 
-const HeaderSystem = React.memo(({ simulationMode, onToggle, connectionStatus, warehouseSummary, currentUser, onLogout }) => {
+const HeaderSystem = React.memo(({ simulationMode, onToggle, connectionStatus, warehouseSummary, currentUser, onLogout, mapView, onToggleMap, mapOverlayMode, onToggleOverlay }) => {
     const [time, setTime] = useState(new Date());
 
     useEffect(() => {
@@ -9,8 +9,12 @@ const HeaderSystem = React.memo(({ simulationMode, onToggle, connectionStatus, w
         return () => clearInterval(timer);
     }, []);
 
+    const headerClasses = mapView === 'google'
+        ? "flex items-center justify-between w-full h-full bg-slate-900/40 backdrop-blur-md border border-white/5 rounded-xl px-6 transition-all duration-1000"
+        : "flex items-center justify-between w-full h-full bg-[#0b1f2a]/60 backdrop-blur-md border border-white/10 rounded-xl px-6 transition-all duration-1000";
+
     return (
-        <div className="flex items-center justify-between w-full h-full bg-[#0b1f2a]/60 backdrop-blur-md border border-white/10 rounded-xl px-6">
+        <div className={headerClasses}>
             <div>
                 <h1 className="text-xl font-light tracking-[0.3em] text-slate-200 uppercase">
                     Logistics Hub
@@ -40,11 +44,25 @@ const HeaderSystem = React.memo(({ simulationMode, onToggle, connectionStatus, w
                         {currentUser?.displayName || currentUser?.email || 'Guest'}
                     </span>
                     <span className="text-[9px] text-slate-400 tracking-[0.2em] uppercase">{time.toLocaleDateString()}</span>
+                    
+                    <button
+                        onClick={onToggleOverlay}
+                        className={`text-[9px] border px-2 py-0.5 rounded tracking-widest uppercase transition-colors ${mapOverlayMode === 'heatmap' ? 'border-amber-500/50 text-amber-400 bg-amber-500/10' : 'border-slate-500/50 text-slate-400 hover:bg-slate-500/10'}`}
+                    >
+                        HEATMAP VIEW
+                    </button>
+
                     <button
                         onClick={onToggle}
-                        className={`text-[9px] border px-2 py-0.5 rounded tracking-widest uppercase transition-colors ${simulationMode ? 'border-amber-500/50 text-amber-400 hover:bg-amber-500/10' : 'border-blue-500/50 text-blue-400 hover:bg-blue-500/10'}`}
+                        className={`text-[9px] border px-2 py-0.5 rounded tracking-widest uppercase transition-colors ${simulationMode ? 'border-blue-500/50 text-blue-400 hover:bg-blue-500/10' : 'border-slate-500/50 text-slate-400 hover:bg-slate-500/10'}`}
                     >
                         {simulationMode ? 'LIVE FEED: ON' : 'LIVE FEED: OFF'}
+                    </button>
+                    <button
+                        onClick={onToggleMap}
+                        className="text-[9px] border border-slate-500/50 px-2 py-0.5 rounded tracking-widest uppercase transition-colors text-slate-400 hover:bg-slate-500/10"
+                    >
+                        {mapView === 'svg' ? 'DETAILED VIEW' : 'EXIT MAP'}
                     </button>
                     {currentUser && (
                         <button

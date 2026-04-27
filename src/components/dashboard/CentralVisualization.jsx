@@ -61,7 +61,7 @@ const projectPoint = (lat, lng) => {
     return [x, y];
 };
 
-const CentralVisualization = ({ shipments, selectedId, onSelect, userEvents = [] }) => {
+const CentralVisualization = ({ shipments, selectedId, onSelect, userEvents = [], mapOverlayMode = 'none', warehouseStats = [] }) => {
     if (!shipments) return null;
 
     return (
@@ -103,6 +103,42 @@ const CentralVisualization = ({ shipments, selectedId, onSelect, userEvents = []
                     style={{ mixBlendMode: 'screen' }}
                 />
 
+                {/* Warehouse Intelligence Layer (Heatmap) */}
+                {warehouseStats.map(wh => {
+                    const coords = projectPoint(wh.location.lat, wh.location.lng);
+                    const isHeatmap = mapOverlayMode === 'heatmap';
+                    const score = wh.activityScore || 0;
+                    
+                    // Heatmap color interpolation (low: blue, mid: amber, high: red)
+                    // We use an SVG circle with high blur instead of gradient for performance
+                    const heatColor = score > 0.7 ? '#ef4444' : (score > 0.4 ? '#f59e0b' : '#3b82f6');
+                    const heatRadius = isHeatmap ? 20 + (score * 40) : 0;
+                    const heatOpacity = isHeatmap ? 0.1 + (score * 0.4) : 0;
+
+                    return (
+                        <g key={`wh-${wh.id}`} transform={`translate(${coords[0]}, ${coords[1]})`}>
+                            {/* Heat radial overlay */}
+                            {isHeatmap && (
+                                <circle 
+                                    r={heatRadius} 
+                                    fill={heatColor} 
+                                    opacity={heatOpacity} 
+                                    filter="url(#glow)"
+                                    style={{ mixBlendMode: 'screen', transition: 'all 1s ease' }}
+                                />
+                            )}
+                            
+                            {/* Warehouse Core Node */}
+                            <circle 
+                                r={3 + (score * 2)} 
+                                fill={heatColor} 
+                                opacity={0.8}
+                                className="transition-all duration-1000"
+                            />
+                        </g>
+                    );
+                })}
+
                 {/* Render Global Logistics Nodes (Ports) */}
                 {GLOBAL_NODES.map(node => (
                     <g key={node.id} transform={`translate(${node.coords[0]}, ${node.coords[1]})`}>
@@ -121,6 +157,10 @@ const CentralVisualization = ({ shipments, selectedId, onSelect, userEvents = []
 
                 {/* Render Routes and Shipment Markers */}
                 {shipments.map(ship => {
+                    // Strict Map Safety Check
+                    if (!ship.routeCoordinates || ship.routeCoordinates.length === 0) return null;
+                    if (isNaN(ship.routeCoordinates[0][0]) || isNaN(ship.routeCoordinates[0][1])) return null;
+
                     const isSelected = selectedId === ship.id;
                     const isHighRisk = ship.riskScore > 80;
                     const isDelayed = ship.status === 'DELAYED';
@@ -130,8 +170,10 @@ const CentralVisualization = ({ shipments, selectedId, onSelect, userEvents = []
                     const coreColor = isHighRisk ? '#f87171' : (isDelayed ? '#fbbf24' : '#60a5fa');
                     const strokeWidth = isSelected ? 4 : 2;
 
-                    const pathD = getSmoothPathString(ship.path);
-                    const currentPos = ship.markerPosition || getPointOnPath(ship.path, ship.progress);
+                    // Support both projected backend path and simple manual route coordinates
+                    const pathPoints = ship.path || ship.routeCoordinates.map(coord => projectPoint(coord[0], coord[1]));
+                    const pathD = getSmoothPathString(pathPoints);
+                    const currentPos = ship.markerPosition || getPointOnPath(pathPoints, ship.progress || 0.5); // Default progress 0.5 for new
 
                     return (
                         <g key={ship.id} onClick={() => onSelect(ship.id)} className="cursor-pointer transition-opacity duration-300">

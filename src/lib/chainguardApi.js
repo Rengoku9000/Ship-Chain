@@ -117,6 +117,41 @@ export const normalizeShipment = (shipment) => {
     };
 };
 
+const enhanceShipmentWithMockData = (shipment) => {
+    const idNum = shipment.numericId || 1;
+    
+    const types = ['Container', 'Bulk', 'Liquid', 'Express'];
+    const sizes = ['40ft', '20ft', '12 pallets', '5000 TEU'];
+    const weights = ['18,500 kg', '22,000 kg', '4,500 kg', '10,200 kg'];
+    const cargos = ['Electronics', 'Automotive Parts', 'Oil', 'Medical Supplies', 'Machinery'];
+    const carriers = ['Maersk', 'MSC', 'CMA CGM', 'Hapag-Lloyd'];
+    const temperatures = ['Ambient', '-18°C', '4°C', 'Ambient', 'Controlled'];
+
+    const type = types[idNum % types.length];
+    const size = sizes[(idNum + 1) % sizes.length];
+    const weight = weights[(idNum + 2) % weights.length];
+    const cargo = cargos[(idNum + 3) % cargos.length];
+    const carrier = carriers[(idNum + 4) % carriers.length];
+    const temperature = temperatures[(idNum + 5) % temperatures.length];
+    
+    const lastCheckpoint = shipment.currentRoute?.[shipment.currentRoute.length - 1] || shipment.source || 'Unknown';
+    const delayReason = (shipment.status === 'DELAYED' || shipment.estimatedDelayMinutes > 0)
+        ? (shipment.explanation || 'Operational delays detected at port')
+        : null;
+
+    return {
+        ...shipment,
+        type,
+        size,
+        weight,
+        cargo,
+        carrier,
+        temperature,
+        lastCheckpoint,
+        delayReason
+    };
+};
+
 const fetchJson = async (path) => {
     const response = await fetch(`${BASE_URL}${path}`);
     if (!response.ok) {
@@ -128,7 +163,7 @@ const fetchJson = async (path) => {
 export const chainguardApi = {
     async getShipments() {
         const data = await fetchJson('/shipments');
-        return data.shipments.map(normalizeShipment);
+        return data.shipments.map(normalizeShipment).map(enhanceShipmentWithMockData);
     },
     async getCost(shipmentId) {
         return fetchJson(`/cost/${shipmentId}`);
@@ -155,14 +190,14 @@ export const chainguardApi = {
             throw new Error(`Failed to create shipment`);
         }
         const data = await response.json();
-        return normalizeShipment(data);
+        return enhanceShipmentWithMockData(normalizeShipment(data));
     },
     connectToShipments(onMessage) {
         const socket = new WebSocket(`${BASE_URL.replace('http', 'ws')}/ws/shipments`);
         socket.onmessage = (event) => {
             const parsed = JSON.parse(event.data);
             if (parsed?.type === 'shipment_update') {
-                onMessage(parsed.data.shipments.map(normalizeShipment));
+                onMessage(parsed.data.shipments.map(normalizeShipment).map(enhanceShipmentWithMockData));
             }
         };
         return socket;
