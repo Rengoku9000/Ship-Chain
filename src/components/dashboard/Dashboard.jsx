@@ -192,18 +192,63 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
     useEffect(() => {
         if (!liveFeedEnabled) {
+            // Pause: stop WebSocket and client simulation
             socketRef.current?.close();
             socketRef.current = null;
             if (reconnectTimerRef.current) {
                 clearTimeout(reconnectTimerRef.current);
                 reconnectTimerRef.current = null;
             }
+            clientSimulation.stopSimulation();
             setConnectionStatus('PAUSED');
             return;
         }
 
+        // Resume: choose strategy based on offline flag
         let disposed = false;
 
+        if (isOfflineRef.current) {
+            // Offline mode — restart the client-side simulation ticker
+            setConnectionStatus('LIVE');
+            clientSimulation.startSimulation((rawShipments) => {
+                if (disposed) return;
+                const normalized = rawShipments.map(normalizeShipment).map((s) => {
+                    const idNum = s.numericId || 1;
+                    const types = ['Container', 'Bulk', 'Liquid', 'Express'];
+                    const sizes = ['40ft', '20ft', '12 pallets', '5000 TEU'];
+                    const weights = ['18,500 kg', '22,000 kg', '4,500 kg', '10,200 kg'];
+                    const cargos = ['Electronics', 'Automotive Parts', 'Oil', 'Medical Supplies', 'Machinery'];
+                    const carriers = ['Maersk', 'MSC', 'CMA CGM', 'Hapag-Lloyd'];
+                    const temperatures = ['Ambient', '-18°C', '4°C', 'Ambient', 'Controlled'];
+                    return {
+                        ...s,
+                        type: types[idNum % types.length],
+                        size: sizes[(idNum + 1) % sizes.length],
+                        weight: weights[(idNum + 2) % weights.length],
+                        cargo: cargos[(idNum + 3) % cargos.length],
+                        carrier: carriers[(idNum + 4) % carriers.length],
+                        temperature: temperatures[(idNum + 5) % temperatures.length],
+                        lastCheckpoint: s.currentRoute?.[s.currentRoute.length - 1] || s.source || 'Unknown',
+                        delayReason: (s.status === 'DELAYED' || s.estimatedDelayMinutes > 0)
+                            ? (s.explanation || 'Operational delays detected at port')
+                            : null,
+                    };
+                });
+                setShipments(normalized);
+                setAlerts((prev) => [
+                    ...buildUpdateAlerts(previousShipmentsRef.current, normalized),
+                    ...prev,
+                ].slice(0, 6));
+                previousShipmentsRef.current = normalized;
+            });
+
+            return () => {
+                disposed = true;
+                clientSimulation.stopSimulation();
+            };
+        }
+
+        // Online mode — connect via WebSocket
         const connect = async () => {
             try {
                 await hydrateDashboard();
