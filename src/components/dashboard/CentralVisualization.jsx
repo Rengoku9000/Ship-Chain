@@ -88,7 +88,11 @@ const CentralVisualization = ({ shipments, selectedId, onSelect, userEvents = []
                                 Reset
                             </button>
                         </div>
-                        <TransformComponent wrapperClass="w-full h-full pointer-events-auto cursor-grab active:cursor-grabbing">
+                        <TransformComponent 
+                            wrapperClass="w-full h-full pointer-events-auto cursor-grab active:cursor-grabbing"
+                            wrapperStyle={{ width: '100%', height: '100%' }}
+                            contentStyle={{ width: '100%', height: '100%' }}
+                        >
                             {/* The SVG coordinates and map bounding box perfectly lock together.
                                 Using exactly 1000x507 keeps the Wikipedia SVG proportions native so lines aren't stretched. */}
                             <svg
