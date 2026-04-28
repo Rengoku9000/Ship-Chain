@@ -11,7 +11,8 @@ const LazyGoogleMapView = React.lazy(() => import('./GoogleMapView'));
 import EventTimeline from './EventTimeline';
 import FloatingAssistant from './FloatingAssistant';
 import ShipmentModal from './ShipmentModal';
-import { buildUpdateAlerts, chainguardApi, createAlertsFromShipments } from '../../lib/chainguardApi';
+import { buildUpdateAlerts, chainguardApi, createAlertsFromShipments, normalizeShipment } from '../../lib/chainguardApi';
+import { clientSimulation } from '../../lib/clientSimulation';
 import { subscribeToEvents } from '../../lib/dbService';
 import { WAREHOUSES, getNearestWarehouse } from '../../data/warehouses';
 
@@ -26,6 +27,7 @@ class ErrorBoundary extends React.Component {
     }
 }
 const Dashboard = ({ currentUser, onLogout }) => {
+    const isOfflineRef = useRef(false);
     const [shipments, setShipments] = useState([]);
     const [alerts, setAlerts] = useState([]);
     const [selectedShipmentId, setSelectedShipmentId] = useState(null);
@@ -105,15 +107,51 @@ const Dashboard = ({ currentUser, onLogout }) => {
                 }
             } catch (error) {
                 if (!cancelled) {
-                    setConnectionStatus('OFFLINE');
-                    setAlerts([
-                        {
-                            id: 'boot-error',
-                            severity: 'high',
-                            text: 'Backend unreachable. Start FastAPI on 127.0.0.1:8000 to stream live data.',
-                            timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
-                        },
-                    ]);
+                    // Backend unreachable — activate client-side simulation
+                    isOfflineRef.current = true;
+                    clientSimulation.init();
+                    const simShipments = clientSimulation.getShipmentsNormalized();
+                    setShipments(simShipments);
+                    setWarehouseData(clientSimulation.getWarehouseStatus().warehouses);
+                    setAlerts(createAlertsFromShipments(simShipments));
+                    previousShipmentsRef.current = simShipments;
+                    setConnectionStatus('LIVE');
+                    if (!selectedShipmentId && simShipments[0]) {
+                        setSelectedShipmentId(simShipments[0].id);
+                    }
+
+                    // Start the simulation loop (mirrors the backend 2s tick)
+                    clientSimulation.startSimulation((rawShipments) => {
+                        if (cancelled) return;
+                        const normalized = rawShipments.map(normalizeShipment).map((s) => {
+                            const idNum = s.numericId || 1;
+                            const types = ['Container', 'Bulk', 'Liquid', 'Express'];
+                            const sizes = ['40ft', '20ft', '12 pallets', '5000 TEU'];
+                            const weights = ['18,500 kg', '22,000 kg', '4,500 kg', '10,200 kg'];
+                            const cargos = ['Electronics', 'Automotive Parts', 'Oil', 'Medical Supplies', 'Machinery'];
+                            const carriers = ['Maersk', 'MSC', 'CMA CGM', 'Hapag-Lloyd'];
+                            const temperatures = ['Ambient', '-18°C', '4°C', 'Ambient', 'Controlled'];
+                            return {
+                                ...s,
+                                type: types[idNum % types.length],
+                                size: sizes[(idNum + 1) % sizes.length],
+                                weight: weights[(idNum + 2) % weights.length],
+                                cargo: cargos[(idNum + 3) % cargos.length],
+                                carrier: carriers[(idNum + 4) % carriers.length],
+                                temperature: temperatures[(idNum + 5) % temperatures.length],
+                                lastCheckpoint: s.currentRoute?.[s.currentRoute.length - 1] || s.source || 'Unknown',
+                                delayReason: (s.status === 'DELAYED' || s.estimatedDelayMinutes > 0)
+                                    ? (s.explanation || 'Operational delays detected at port')
+                                    : null,
+                            };
+                        });
+                        setShipments(normalized);
+                        setAlerts((prev) => [
+                            ...buildUpdateAlerts(previousShipmentsRef.current, normalized),
+                            ...prev,
+                        ].slice(0, 6));
+                        previousShipmentsRef.current = normalized;
+                    });
                 }
             }
         };
@@ -122,6 +160,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
         return () => {
             cancelled = true;
+            clientSimulation.stopSimulation();
         };
     }, []);
 
@@ -136,8 +175,12 @@ const Dashboard = ({ currentUser, onLogout }) => {
     useEffect(() => {
         const interval = setInterval(async () => {
             try {
-                const warehouseResponse = await chainguardApi.getWarehouseStatus();
-                setWarehouseData(warehouseResponse.warehouses);
+                if (isOfflineRef.current) {
+                    setWarehouseData(clientSimulation.getWarehouseStatus().warehouses);
+                } else {
+                    const warehouseResponse = await chainguardApi.getWarehouseStatus();
+                    setWarehouseData(warehouseResponse.warehouses);
+                }
             } catch (_error) {
                 // Keep the last known warehouse state when polling fails.
             }
@@ -214,16 +257,26 @@ const Dashboard = ({ currentUser, onLogout }) => {
 
         const loadSelectedShipmentData = async () => {
             try {
-                const [costResponse, logsResponse] = await Promise.all([
-                    chainguardApi.getCost(selectedShipment.numericId),
-                    chainguardApi.getLogs(selectedShipment.numericId),
-                ]);
-
-                if (cancelled) return;
-
-                setSelectedCost(costResponse);
-                setSelectedLogs(logsResponse.log);
-                setSelectedLogHash(logsResponse.hash);
+                if (isOfflineRef.current) {
+                    // Use client-side simulation data
+                    const costData = clientSimulation.getCost(selectedShipment.numericId);
+                    const logsData = await clientSimulation.getLogs(selectedShipment.numericId);
+                    if (!cancelled) {
+                        setSelectedCost(costData);
+                        setSelectedLogs(logsData.log);
+                        setSelectedLogHash(logsData.hash);
+                    }
+                } else {
+                    const [costResponse, logsResponse] = await Promise.all([
+                        chainguardApi.getCost(selectedShipment.numericId),
+                        chainguardApi.getLogs(selectedShipment.numericId),
+                    ]);
+                    if (!cancelled) {
+                        setSelectedCost(costResponse);
+                        setSelectedLogs(logsResponse.log);
+                        setSelectedLogHash(logsResponse.hash);
+                    }
+                }
             } catch (_error) {
                 if (!cancelled) {
                     setSelectedCost(null);
