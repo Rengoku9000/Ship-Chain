@@ -2,6 +2,8 @@
 
 A premium, maritime-themed logistics intelligence platform. This application transforms the traditional authentication experience into a seamless, cinematic journey, acting as a gateway into a high-tier logistics dashboard. Built with a focus on real-time data visualization, predictive risk modeling, and cinematic user interfaces.
 
+🔗 **Live Demo:** [https://ship-chain.vercel.app](https://ship-chain.vercel.app/)
+
 ![ChainGuard AI+ Dashboard](https://images.unsplash.com/photo-1494412574643-ff11b0a5c1c3?auto=format&fit=crop&q=80&w=2000)
 
 ## 🌟 Key Features
