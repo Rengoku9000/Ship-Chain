@@ -80,7 +80,7 @@ const GoogleMapView = ({ shipments, selectedId, onSelect, userEvents = [], mapOv
     const selectedEvent = eventMarkers.find((event) => event.id === selectedEventId) || null;
 
     return (
-        <div className="absolute inset-0 z-10">
+        <div className="absolute inset-0 z-10 pointer-events-auto">
             <APIProvider apiKey={apiKey} libraries={['visualization']}>
                 <Map
                     defaultCenter={defaultCenter}
