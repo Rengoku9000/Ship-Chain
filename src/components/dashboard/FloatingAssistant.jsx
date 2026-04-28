@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, Zap, BarChart3 } from 'lucide-react';
+import { X, Send, Zap, BarChart3, Bot } from 'lucide-react';
 
 const FloatingAssistant = React.memo(({ activeShipment }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -127,11 +127,7 @@ const FloatingAssistant = React.memo(({ activeShipment }) => {
                         {/* Header */}
                         <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-black/20">
                             <div className="flex items-center space-x-2">
-                                <img 
-                                    src="/Gemini_Generated_Image_onlkpuonlkpuonlk.png" 
-                                    alt="AI" 
-                                    className="w-5 h-5 object-contain rounded-full" 
-                                />
+                                <Bot className="w-4 h-4 text-blue-400" />
                                 <h2 className="text-xs tracking-[0.1em] text-slate-200 font-medium uppercase">AI Assistant</h2>
                             </div>
                             <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white transition-colors">
@@ -242,11 +238,7 @@ const FloatingAssistant = React.memo(({ activeShipment }) => {
                 {isOpen ? (
                     <X className="w-6 h-6 text-slate-300" />
                 ) : (
-                    <img
-                        src="/Gemini_Generated_Image_onlkpuonlkpuonlk.png"
-                        alt="AI Assistant"
-                        className="w-7 h-7 object-contain rounded-full"
-                    />
+                    <Bot className="w-6 h-6 text-blue-400" />
                 )}
 
                 {hasNotification && !isOpen && (
