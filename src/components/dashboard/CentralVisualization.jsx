@@ -77,7 +77,7 @@ const CentralVisualization = ({ shipments, selectedId, onSelect, userEvents = []
             >
                 {({ zoomIn, zoomOut, resetTransform }) => (
                     <React.Fragment>
-                        <div className="absolute top-0 right-[40%] z-50 flex space-x-2 pointer-events-auto">
+                        <div className="absolute bottom-4 right-0 z-50 flex space-x-2 pointer-events-auto">
                             <button onClick={() => zoomOut()} className="w-8 h-8 flex items-center justify-center bg-[#0b1f2a]/80 hover:bg-[#1a3648] text-slate-300 hover:text-white rounded-lg border border-white/10 backdrop-blur-md shadow-lg transition-colors">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                             </button>
