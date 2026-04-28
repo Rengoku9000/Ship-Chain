@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 const getSmoothPathString = (points) => {
     if (!points || points.length === 0) return '';
@@ -66,13 +67,35 @@ const CentralVisualization = ({ shipments, selectedId, onSelect, userEvents = []
 
     return (
         <div className="absolute inset-0 z-10 pointer-events-none flex mx-24 my-20">
-            {/* The SVG coordinates and map bounding box perfectly lock together.
-                Using exactly 1000x507 keeps the Wikipedia SVG proportions native so lines aren't stretched. */}
-            <svg
-                className="w-full h-full relative z-20 pointer-events-auto"
-                viewBox="0 0 1000 507"
-                preserveAspectRatio="xMidYMid meet"
+            <TransformWrapper
+                initialScale={1}
+                minScale={0.8}
+                maxScale={4}
+                centerOnInit={true}
+                wheel={{ step: 0.1 }}
+                pinch={{ step: 5 }}
             >
+                {({ zoomIn, zoomOut, resetTransform }) => (
+                    <React.Fragment>
+                        <div className="absolute top-0 right-[40%] z-50 flex space-x-2 pointer-events-auto">
+                            <button onClick={() => zoomOut()} className="w-8 h-8 flex items-center justify-center bg-[#0b1f2a]/80 hover:bg-[#1a3648] text-slate-300 hover:text-white rounded-lg border border-white/10 backdrop-blur-md shadow-lg transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            </button>
+                            <button onClick={() => zoomIn()} className="w-8 h-8 flex items-center justify-center bg-[#0b1f2a]/80 hover:bg-[#1a3648] text-slate-300 hover:text-white rounded-lg border border-white/10 backdrop-blur-md shadow-lg transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            </button>
+                            <button onClick={() => resetTransform()} className="px-3 h-8 flex items-center justify-center bg-[#0b1f2a]/80 hover:bg-[#1a3648] text-[10px] tracking-widest uppercase font-mono text-slate-300 hover:text-white rounded-lg border border-white/10 backdrop-blur-md shadow-lg transition-colors">
+                                Reset
+                            </button>
+                        </div>
+                        <TransformComponent wrapperClass="w-full h-full pointer-events-auto cursor-grab active:cursor-grabbing">
+                            {/* The SVG coordinates and map bounding box perfectly lock together.
+                                Using exactly 1000x507 keeps the Wikipedia SVG proportions native so lines aren't stretched. */}
+                            <svg
+                                className="w-full h-full relative z-20 pointer-events-auto"
+                                viewBox="0 0 1000 507"
+                                preserveAspectRatio="xMidYMid meet"
+                            >
                 <defs>
                     <linearGradient id="normalGrad" x1="0" y1="0" x2="1" y2="0">
                         <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.2" />
@@ -279,6 +302,10 @@ const CentralVisualization = ({ shipments, selectedId, onSelect, userEvents = []
                     );
                 })}
             </svg>
+                        </TransformComponent>
+                    </React.Fragment>
+                )}
+            </TransformWrapper>
         </div>
     );
 };
