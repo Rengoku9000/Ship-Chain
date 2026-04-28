@@ -46,7 +46,7 @@ const MetricsPanel = React.memo(({ shipments, warehouseData = [] }) => {
                 <div className="text-[8px] text-slate-500 uppercase tracking-widest mb-2">Warehouse Load Density</div>
                 <div className="flex items-end h-8 space-x-1">
                     {densitySeries.map((val, i) => (
-                        <div key={i} className="flex-1 bg-blue-500/30 rounded-sm relative group overflow-hidden">
+                        <div key={i} className="flex-1 h-full bg-blue-500/30 rounded-sm relative group">
                             <div
                                 className="absolute bottom-0 w-full bg-blue-400/80 transition-all duration-700"
                                 style={{ height: `${val}%` }}
