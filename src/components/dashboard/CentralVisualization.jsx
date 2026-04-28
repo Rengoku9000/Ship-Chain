@@ -159,7 +159,8 @@ const CentralVisualization = ({ shipments, selectedId, onSelect, userEvents = []
                 {shipments.map(ship => {
                     // Strict Map Safety Check
                     if (!ship.routeCoordinates || ship.routeCoordinates.length === 0) return null;
-                    if (isNaN(ship.routeCoordinates[0][0]) || isNaN(ship.routeCoordinates[0][1])) return null;
+                    const firstCoord = ship.routeCoordinates[0];
+                    if (firstCoord.lat === undefined || firstCoord.lng === undefined) return null;
 
                     const isSelected = selectedId === ship.id;
                     const isHighRisk = ship.riskScore > 80;
@@ -171,7 +172,7 @@ const CentralVisualization = ({ shipments, selectedId, onSelect, userEvents = []
                     const strokeWidth = isSelected ? 4 : 2;
 
                     // Support both projected backend path and simple manual route coordinates
-                    const pathPoints = ship.path || ship.routeCoordinates.map(coord => projectPoint(coord[0], coord[1]));
+                    const pathPoints = ship.path || ship.routeCoordinates.map(coord => projectPoint(coord.lat, coord.lng));
                     const pathD = getSmoothPathString(pathPoints);
                     const currentPos = ship.markerPosition || getPointOnPath(pathPoints, ship.progress || 0.5); // Default progress 0.5 for new
 
