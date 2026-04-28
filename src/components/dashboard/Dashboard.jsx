@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import HeaderSystem from './HeaderSystem';
 import ShipmentPanel from './ShipmentPanel';
 import SystemEventsPanel from './SystemEventsPanel';
@@ -41,6 +41,7 @@ const Dashboard = ({ currentUser, onLogout }) => {
     const [mapView, setMapView] = useState('svg');
     const [mapOverlayMode, setMapOverlayMode] = useState('none'); // 'none' | 'heatmap'
     const [hasOpenedGoogleMap, setHasOpenedGoogleMap] = useState(false);
+    const [activeRightTab, setActiveRightTab] = useState('kpi');
     
     // Deletion State
     const [deletedShipmentIds, setDeletedShipmentIds] = useState(() => {
@@ -513,12 +514,48 @@ const Dashboard = ({ currentUser, onLogout }) => {
                 initial={{ opacity: 0, x: 30 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 1.2, ease: "easeOut", delay: 0.5 }}
-                className="col-span-3 row-span-4 z-20 flex flex-col gap-4"
+                className="col-span-3 row-span-4 z-20 flex flex-col gap-4 pointer-events-auto"
                 style={panelStyle}
             >
-                <MetricsPanel shipments={mergedShipments} warehouseData={warehouseData} />
-                <SystemEventsPanel alerts={alerts} />
-                <CostAnalysis shipment={selectedShipment} costData={selectedCost} />
+                <div className="flex space-x-1 p-1 bg-[#0b1f2a]/80 backdrop-blur-md rounded-xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
+                    {[
+                        { id: 'kpi', label: 'Performance' },
+                        { id: 'events', label: 'System Events' },
+                        { id: 'cost', label: 'Cost Flow' }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveRightTab(tab.id)}
+                            className={`flex-1 py-2.5 px-3 text-[10px] tracking-[0.15em] uppercase font-mono rounded-lg transition-all duration-300 ${
+                                activeRightTab === tab.id 
+                                ? 'bg-slate-800 text-white shadow-inner border border-white/10' 
+                                : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="flex-1 relative h-full">
+                    <AnimatePresence mode="wait">
+                        {activeRightTab === 'kpi' && (
+                            <motion.div key="kpi" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }} className="absolute inset-0">
+                                <MetricsPanel shipments={mergedShipments} warehouseData={warehouseData} />
+                            </motion.div>
+                        )}
+                        {activeRightTab === 'events' && (
+                            <motion.div key="events" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }} className="absolute inset-0">
+                                <SystemEventsPanel alerts={alerts} />
+                            </motion.div>
+                        )}
+                        {activeRightTab === 'cost' && (
+                            <motion.div key="cost" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }} className="absolute inset-0">
+                                <CostAnalysis shipment={selectedShipment} costData={selectedCost} />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
             </motion.div>
 
             <motion.div
