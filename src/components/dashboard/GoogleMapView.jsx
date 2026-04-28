@@ -86,6 +86,7 @@ const GoogleMapView = ({ shipments, selectedId, onSelect, userEvents = [], mapOv
                     defaultCenter={defaultCenter}
                     defaultZoom={2.2}
                     disableDefaultUI={true}
+                    zoomControl={true}
                     gestureHandling="greedy"
                     styles={maritimeMapStyles}
                     className="w-full h-full"
