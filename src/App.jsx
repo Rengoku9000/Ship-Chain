@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import IntroSequence from './components/IntroSequence';
 import FloatingAuthTab from './components/FloatingAuthTab';
@@ -21,8 +21,13 @@ function App() {
         setAppState(newState);
     };
 
+    const appStateRef = useRef(appState);
+    useEffect(() => {
+        appStateRef.current = appState;
+    }, [appState]);
+
     const handleLogin = () => {
-        setSystemState('idle');
+        // Animation is now triggered by the auth state listener
     };
 
     const handleLogout = async () => {
@@ -49,9 +54,13 @@ function App() {
         const unsubscribe = subscribeToAuthState((user) => {
             setCurrentUser(user);
             if (user) {
-                setShowDashboard(true);
-                setSystemState('active');
-                setAppState('DASHBOARD');
+                if (appStateRef.current === 'AUTH') {
+                    setSystemState('animating');
+                } else {
+                    setShowDashboard(true);
+                    setSystemState('active');
+                    setAppState('DASHBOARD');
+                }
             } else {
                 setSystemState('idle');
             }
